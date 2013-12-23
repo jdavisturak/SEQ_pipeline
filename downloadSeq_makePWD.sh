@@ -16,8 +16,9 @@ do
 	chmod 660 pwd_$D
 
 	# create command of interest:
-	cmd="rsync --password-file=pwd_$D --recursive --times --verbose --stats --progress --itemize-changes rsync://$D@pan.pellegrini.mcdb.ucla.edu/$D/  $outputDir."
+	cmd="nohup rsync --password-file=pwd_$D --recursive --times --verbose --stats --progress --itemize-changes rsync://$D@pan.pellegrini.mcdb.ucla.edu/$D/  $outputDir. &"
 	echo $cmd
+
 
 done
 

@@ -21,6 +21,7 @@ from __future__ import with_statement
 import os
 import sys
 import glob
+import re
 from optparse import OptionParser
 from Bio.Seq import Seq
 from Bio.Alphabet import generic_dna

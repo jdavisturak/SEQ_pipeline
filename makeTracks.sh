@@ -2,7 +2,7 @@ inputDir=$1
 outputDir=$2
 cd $inputDir
 
-#scp *bw signal@signalingsystems.ucsd.edu:$outputDir
+scp *bw signal@signalingsystems.ucsd.edu:$outputDir
 
 for bw in *bw; do
 
