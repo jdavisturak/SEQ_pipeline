@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+d#!/usr/bin/env python
 """Convert output solexa qseq files into fastq format, handling multiplexing.
 
 Works with qseq output from Illumina's on-machine base caller
@@ -25,6 +25,7 @@ from optparse import OptionParser
 from Bio.Seq import Seq
 from Bio.Alphabet import generic_dna
 from demultiplex import *
+import multiprocess as mp
 
 def main(run_name, target_name, do_fail=False, outdir=None, reverse=False,RevBarcodes=False):
     assert os.path.exists(target_name)
@@ -46,6 +47,14 @@ def main(run_name, target_name, do_fail=False, outdir=None, reverse=False,RevBar
         fail_dir = None
     targets = read_targets(filename=target_name)
     barcodes2 = []
+
+    processes = []
+    #for x in xrange(len(samples)):
+        #queues.append(Queue())
+        processes[x].start()
+        processes[x].join()
+  
+
     for lane_num in list(set(targets[:,1])):
         print "Demultiplexing lane %s" % lane_num
         lane_prefix = "s_%s" % lane_num
@@ -61,7 +70,11 @@ def main(run_name, target_name, do_fail=False, outdir=None, reverse=False,RevBar
             if RevBarcodes:
                 barcodes2 = [str(Seq(b, generic_dna).reverse_complement()) for b in barcodes2]
 
-        write_lane(lane_prefix, out_prefix, outdir, fail_dir,target_name,samples,barcodes,barcodes2, lane_num, reverse)
+        processes.append(mp.Process(target=write_lane,args=(lane_prefix, out_prefix, outdir, fail_dir,target_name,samples,barcodes,barcodes2, lane_num, reverse)))
+        processes[x].start()
+        processes[x].join()
+        #write_lane(lane_prefix, out_prefix, outdir, fail_dir,target_name,samples,barcodes,barcodes2, lane_num, reverse)
+
 
 def write_lane(lane_prefix, out_prefix, outdir, fail_dir,target_name,samples,barcodes,barcodes2, lane_num, reverse=False):
 
