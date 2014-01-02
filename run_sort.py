@@ -1,8 +1,8 @@
 #!/usr/bin/env python
-""" Run htseq-count on a (directort of) sorted .bam files
+""" Run sam_to_sam.py on a (directory of) .sam files
 Support for parallel threads
 
-Usage: -i input_dir -o outdir -c cpsfile [-O OPTIONS] [-N num_processors (default 1)]
+Usage: -i input_dir -o outdir [-O OPTIONS] [-N num_processors (default 1)]
 
 
 """
@@ -18,13 +18,13 @@ from multiprocessing import Process, Queue, current_process
 
 ## Function to generate cmd to run on one file
 
-def call_bam2ssj(infile,  outfile, cps, options=''):
-    cmd = ["/home/jeremy/Code/bam2ssj_jdt/bam2ssj",'-bam',infile, '-cps', cps, '-log','%s.log' % outfile]
+def call_sort(infile,  outdir,ref,options=''):
+    cmd = ["sam_to_bam.py",'--convert',infile, outdir,'--ref=%s' % ref]
 
     if options != '' and options != None:
         cmd += options.split(' ')
     
-    return [cmd, outfile]
+    return [cmd]
 
 
 ## Worker function for parallelization
@@ -32,11 +32,11 @@ def worker(work_queue, done_queue):
     try:
         for cmd in iter(work_queue.get, 'STOP'):
             print cmd
-            f = open(cmd[1],'w') # stdout will be mapped to file
-            p = subprocess.Popen(cmd[0], stdout=f)
+            #f = open(cmd[1],'w') # stdout will be mapped to file
+            p = subprocess.Popen(cmd[0])
             print "pid: %s" % p.pid
             retval = p.wait()
-            f.close()
+            #f.close()
             done_queue.put("%s - %s got %s, %s." % (current_process().name, cmd, p.pid, retval))
 
     except Exception, e:
@@ -44,16 +44,13 @@ def worker(work_queue, done_queue):
     return True
 
 
-def main(indir, outdir, cps, option_string, num_processors):
+def main(indir, outdir, ref, option_string, num_processors):
 
 
     try:
         num_processors = int(num_processors)
-    except ValueError:
+    except ValueError, TypeError:
         num_processors = 1
-    except TypeError:
-        num_processors = 1
-        d
     if num_processors < 1:
         num_processors = 1
 
@@ -68,17 +65,17 @@ def main(indir, outdir, cps, option_string, num_processors):
 
     assert os.path.isdir(indir)
     
-    # Look through the input directory for .bam files
-    bams = glob.glob("%s/*.sorted.bam" % indir)
+    # Look through the input directory for .sam files
+    sams = glob.glob("%s/*.sam" % indir)
     
     ## parallel stuff:
     work_queue = Queue()
     done_queue = Queue()
     processes = []
 
-    for bam in bams:
-        prefix = re.sub('\.sorted.bam$','',os.path.basename(bam))
-        cmd = call_bam2ssj(bam,  "%s/%s.ssj" % (outdir, prefix), cps, option_string)
+    for sam in sams:
+        prefix = re.sub('\.sam$','',os.path.basename(sam))
+        cmd = call_sort(sam, outdir, ref, option_string)
         work_queue.put(cmd)
 
     for w in xrange(num_processors):
@@ -104,17 +101,17 @@ if __name__ == "__main__":
                       default=False)
     parser.add_option("-o", "--outdir", dest="outdir", action="store",
                       default=None)
-    parser.add_option("-c", "--cps", dest="cpsfile", action="store",
-                      default=None)
     parser.add_option("-O", "--Options", dest="option_string", action="store",
                       default=None)
     parser.add_option("-N", "--num_processors", dest="num_processors", action="store",
                       default=None)
+    parser.add_option("-r", "--ref", dest="ref", action="store",
+                      default=None)
     parser.add_option("-H", "--Help", dest="Help", action="store",
                       default=None)
     (options, args) = parser.parse_args()
-    if options.Help or options.outdir is None or options.input_dir is None or options.cpsfile is None:
+    if options.Help or options.outdir is None or options.input_dir is None:
         print __doc__
         sys.exit()
-    main(options.input_dir, options.outdir, options.cpsfile,options.option_string, options.num_processors)
+    main(options.input_dir, options.outdir,options.ref, options.option_string, options.num_processors)
 

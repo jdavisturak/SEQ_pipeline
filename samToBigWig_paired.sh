@@ -1,4 +1,5 @@
 #!/bin/bash
+#
 # Jeremy Davis-Turak
 #
 # Convert .sam to bigWig

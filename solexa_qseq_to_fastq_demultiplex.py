@@ -1,10 +1,10 @@
-d#!/usr/bin/env python
+#!/usr/bin/env python
 """Convert output solexa qseq files into fastq format, handling multiplexing.
 
 Works with qseq output from Illumina's on-machine base caller
 
 Usage:
-    solexa_qseq_to_fastq.py <run name>  <target file name> -o <outdir>
+    solexa_qseq_to_fastq.py <run name>  <targets file name> -o <outdir>
 
 Output files will be in the <outdir> directory as <run_name><sample>_l<lane>[_1/2].fastq
 
@@ -25,9 +25,10 @@ from optparse import OptionParser
 from Bio.Seq import Seq
 from Bio.Alphabet import generic_dna
 from demultiplex import *
-import multiprocess as mp
+import multiprocessing as mp
 
 def main(run_name, target_name, do_fail=False, outdir=None, reverse=False,RevBarcodes=False):
+    print target_name
     assert os.path.exists(target_name)
     if outdir is None:
         outdir = os.path.join(os.getcwd(), "fastq")
@@ -49,12 +50,8 @@ def main(run_name, target_name, do_fail=False, outdir=None, reverse=False,RevBar
     barcodes2 = []
 
     processes = []
-    #for x in xrange(len(samples)):
-        #queues.append(Queue())
-        processes[x].start()
-        processes[x].join()
-  
-
+    p=0
+   
     for lane_num in list(set(targets[:,1])):
         print "Demultiplexing lane %s" % lane_num
         lane_prefix = "s_%s" % lane_num
@@ -71,10 +68,12 @@ def main(run_name, target_name, do_fail=False, outdir=None, reverse=False,RevBar
                 barcodes2 = [str(Seq(b, generic_dna).reverse_complement()) for b in barcodes2]
 
         processes.append(mp.Process(target=write_lane,args=(lane_prefix, out_prefix, outdir, fail_dir,target_name,samples,barcodes,barcodes2, lane_num, reverse)))
-        processes[x].start()
-        processes[x].join()
+        processes[p].start()
+        p += 1
         #write_lane(lane_prefix, out_prefix, outdir, fail_dir,target_name,samples,barcodes,barcodes2, lane_num, reverse)
-
+    
+    for p in processes:
+        p.join()
 
 def write_lane(lane_prefix, out_prefix, outdir, fail_dir,target_name,samples,barcodes,barcodes2, lane_num, reverse=False):
 

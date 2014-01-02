@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-""" Run htseq-count on a (directort of) sorted .bam files
+""" Run sjcount on a (directory of) sorted .bam files
 Support for parallel threads
 
 Usage: -i input_dir -o outdir [-O OPTIONS] [-N num_processors (default 1)]
