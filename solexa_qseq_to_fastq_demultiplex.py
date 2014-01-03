@@ -13,7 +13,8 @@ identified by being much shorter than the primary read.
 
 Optional arguments:
     --failed (-f): Write out reads failing the Illumina quality checks instead.
-    --reverse (-r): reverse-complement reads before sending to the fastq file?
+    --reverse (-r): Reads map to anti-sense strand of RNA.  This flag has different consequences for paired or unpaired reads:
+            Unpaired (single-end) reads get reverse-complemented, whereas Paired reads swap their identities 
     
 """
 
@@ -103,7 +104,7 @@ def write_lane(lane_prefix, out_prefix, outdir, fail_dir,target_name,samples,bar
         for i, fname in enumerate(files):
             bc_file = _get_associated_barcode(i, fname, bc_files)
             bc2_file = _get_associated_barcode(i ,fname, bc2_files)
-            convert_qseq_to_fastq(fname, num, bc_file, bc2_file, out_files, bc_map, ambig_seqs, ambig_seqs2, ambig_bcs, bc_len, bc2_len,  fail_files, reverse)
+            convert_qseq_to_fastq(fname, num, bc_file, bc2_file, out_files, bc_map, ambig_seqs, ambig_seqs2, ambig_bcs, bc_len, bc2_len,  is_paired,fail_files, reverse)
 
 def _get_associated_barcode(file_num, fname, bc_files):
     """Get barcodes for the first read if present.
@@ -117,15 +118,22 @@ def _get_associated_barcode(file_num, fname, bc_files):
         return bc_file
     return None
 
-def convert_qseq_to_fastq(fname, num, bc_file, bc2_file, out_files, bc_map, ambig_seqs, ambig_seqs2, ambig_bcs, bc_len, bc2_len, fail_files=None, reverse=False):
+def convert_qseq_to_fastq(fname, num, bc_file, bc2_file, out_files, bc_map, ambig_seqs, ambig_seqs2, ambig_bcs, bc_len, bc2_len, is_paired, fail_files=None, reverse=False):
   """Convert a qseq file into the appropriate fastq output.
   """
   
   bc_iterator = _qseq_iterator(bc_file, fail_files is None) if bc_file else None
   bc2_iterator = _qseq_iterator(bc2_file, fail_files is None) if bc2_file else None
+
+  # If paired-end and reverse==True, swap the identity of the read (1 v 2) 
+  # "num" is used both to add the flag at the end of the read NAME and to determine the target file name
+  if reverse and is_paired:
+    num = str(3-int(num))
   
   for basename, seq, qual, passed in _qseq_iterator(fname, fail_files is None):
-    if reverse:
+    
+    # If single-end and reverse==True, rev comp the read
+    if reverse and not is_paired:
         # reverse quality string
         qual = qual[::-1] 
         # reverse COMPLEMENT DNA string
@@ -137,15 +145,15 @@ def convert_qseq_to_fastq(fname, num, bc_file, bc2_file, out_files, bc_map, ambi
     
     bc2_seq = []
     if bc2_iterator:
-	    (_, bc2_seq, _, _) = bc2_iterator.next()
-	    
+        (_, bc2_seq, _, _) = bc2_iterator.next()
+        
     BC_SEQ =  bc_seq[0:bc_len]
     BC2_SEQ = bc2_seq[0:bc2_len] if bc2_file else []
-	    
+        
     full_seq = "%s\t%s" % (BC_SEQ,BC2_SEQ)
     name = "%s/%s" % (basename, num)
     out = "@%s\n%s\n+\n%s\n" % (name, seq, qual)
-  	
+    
     my_index = get_sample_index(BC_SEQ, BC2_SEQ, bc_map)       
   
     if passed:
@@ -233,14 +241,14 @@ def _split_paired(files):
             else:
                 two.append(f)
         elif parts[2] == "3":
-	    cur_size = _get_qseq_seq_size(f)
-	    assert ref_size is not None
-	    if cur_size < ref_size:
-		bcs2.append(f)
-	    else:
-		two.append(f)
-	elif parts[2] == "4":
-	    two.append(f)
+        cur_size = _get_qseq_seq_size(f)
+        assert ref_size is not None
+        if cur_size < ref_size:
+        bcs2.append(f)
+        else:
+        two.append(f)
+    elif parts[2] == "4":
+        two.append(f)
         else:
             raise ValueError("Unexpected part: %s" % f)
     one.sort()
