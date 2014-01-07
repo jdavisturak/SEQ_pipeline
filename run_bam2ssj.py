@@ -7,7 +7,7 @@ Usage: -i input_dir -o outdir -c cpsfile [-O OPTIONS] [-N num_processors (defaul
 
 """
 
-from __future__ import with_statement
+from __future__ import with_statement 
 import os
 import sys
 import glob
@@ -19,7 +19,7 @@ from multiprocessing import Process, Queue, current_process
 ## Function to generate cmd to run on one file
 
 def call_bam2ssj(infile,  outfile, cps, options=''):
-    cmd = ["/home/jeremy/Code/bam2ssj_jdt/bam2ssj",'-bam',infile, '-cps', cps, '-log','%s.log' % outfile]
+    cmd = ["/home/jeremy/Code/bam2ssj_jdt/bam2ssj",'-bam',infile, '-cps', cps, '-log','%s.log' % outfile,'read1','0']
 
     if options != '' and options != None:
         cmd += options.split(' ')
@@ -53,7 +53,7 @@ def main(indir, outdir, cps, option_string, num_processors):
         num_processors = 1
     except TypeError:
         num_processors = 1
-        d
+        
     if num_processors < 1:
         num_processors = 1
 

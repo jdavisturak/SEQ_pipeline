@@ -84,12 +84,12 @@ def create_barcode_dictionary(barcodes, max_distance=2):
  
   if not barcodes:
       return None
-  print "calculating Hamming distances"
-
+  
   # Generate kmers                                    
   num = len(barcodes[0]);
   kmers = generate_Kmers(num=num)
   
+  print "calculating Hamming distances"
   # Get minumum barcode distance
   min_dist = min_hamming(barcodes)
   

@@ -110,25 +110,25 @@ def main(options):
 
 
 
-# if __name__ == "__main__":
-#     parser = OptionParser()
-#     parser.add_option("-i", "--input_dir", dest="input_dir", action="store",
-#                       default=False)
-#     parser.add_option("-o", "--outdir", dest="outdir", action="store",
-#                       default=None)
-#     parser.add_option("-g", "--gtf_file", dest="gtf", action="store",
-#                       default=None)
-#     parser.add_option("-s", "--stranded", dest="stranded", action="store",
-#                       default=None)
-#     parser.add_option("-O", "--Options", dest="option_string", action="store",
-#                       default=None)
-#     parser.add_option("-N", "--num_processors", dest="num_processors", action="store",
-#                       default=None)
-#     parser.add_option("-H", "--Help", dest="Help", action="store",
-#                       default=None)
-#     (options, args) = parser.parse_args()
-#     if options.Help or options.outdir is None or options.input_dir is None or options.gtf is None:
-#         print __doc__
-#         sys.exit()
-#     main(options)
+if __name__ == "__main__":
+    parser = OptionParser()
+    parser.add_option("-i", "--input_dir", dest="input_dir", action="store",
+                      default=False)
+    parser.add_option("-o", "--outdir", dest="outdir", action="store",
+                      default=None)
+    parser.add_option("-g", "--gtf_file", dest="gtf", action="store",
+                      default=None)
+    parser.add_option("-s", "--stranded", dest="stranded", action="store",
+                      default=None)
+    parser.add_option("-O", "--Options", dest="option_string", action="store",
+                      default=None)
+    parser.add_option("-N", "--num_processors", dest="num_processors", action="store",
+                      default=None)
+    parser.add_option("-H", "--Help", dest="Help", action="store",
+                      default=None)
+    (options, args) = parser.parse_args()
+    if options.Help or options.outdir is None or options.input_dir is None or options.gtf is None:
+        print __doc__
+        sys.exit()
+    main(options)
 

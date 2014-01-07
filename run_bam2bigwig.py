@@ -19,27 +19,36 @@ from multiprocessing import Process, Queue, current_process
 ## Function to generate cmd to run on one file
 
 def call_bw_chr(infile,  outbase,ChromInfo, extraChrString,options=''):
-    #cmd = ["make_bigWig_generic_addChr.sh",'--convert',infile, outdir,'--ref=%s' % ref]
-    myAwk = "'{s=\$6;str=substr(\$4,length(\$4),1);if(str==2){if(s==\"+\"_) s=\"-\"; else s=\"+\"} chr=\"%s\"\$1; printf(\"%s\t%d\t%d\t0\t0\t%s\n\",chr,\$2,\$3,s) | \"sort -k1,1 -k2,2n | genomeCoverageBed -i stdin -bg -g %s | wigToBigWig stdin %s %s%s.bw\"s;}'" % (extraChrString,ChromInfo, ChromInfo,outbase, extraChrString)
-    cmd=["bamToBed",infile, "-splitD", "|", "awk", myAwk.split(" ")
+    
+    myAwk = "{chr=\"%s\"$1; printf(\"%s\\t%d\\t%d\\t0\\t0\\t%s\\n\",chr,$2,$3,$6) | \" genomeCoverageBed -i stdin -bg -g %s | wigToBigWig stdin %s %s%s.bw\"s;}" % (extraChrString,ChromInfo, ChromInfo,outbase, extraChrString)
+    cmd=["bamToBed","-i",infile, "-splitD"]
+
+    print myAwk
 
     if options != '' and options != None:
         cmd += options.split(' ')
-    
-    return [cmd]
+
+    cmd = [cmd, ['awk', myAwk]]
+    return cmd
 
 
 ## Worker function for parallelization
-def worker(work_queue, done_queue):
+def worker_pipe1(work_queue, done_queue):
     try:
         for cmd in iter(work_queue.get, 'STOP'):
-            print cmd
-            #f = open(cmd[1],'w') # stdout will be mapped to file
-            p = subprocess.Popen(cmd[0])
-            print "pid: %s" % p.pid
-            retval = p.wait()
-            #f.close()
-            done_queue.put("%s - %s got %s, %s." % (current_process().name, cmd, p.pid, retval))
+            print cmd            
+            p1 = subprocess.Popen(cmd[0], stdout=subprocess.PIPE)
+            print "pid: %s" % p1.pid
+
+            done_queue.put("%s - %s got %s." % (current_process().name, cmd, p1.pid))
+
+            p2 = subprocess.Popen(cmd[1], stdin=p1.stdout)
+            p1.stdout.close()
+            print "pid2: %s" % p2.pid
+            
+            retval = p2.wait()
+
+            done_queue.put("%s - %s got %s, %s." % (current_process().name, cmd, p2.pid, retval))
 
     except Exception, e:
         done_queue.put("%s failed on %s with: %s" % (current_process().name, cmd, e.message))
