@@ -86,7 +86,7 @@ def main(indir, outdir, ref, extraChrString, option_string, num_processors):
 
     for bam in bams:
         prefix = re.sub('\.sorted.bam$','',os.path.basename(bam))
-        cmd = call_bw(bam, outdir, ref, extraChrString option_string)
+        cmd = call_bw(bam, outdir, ref, extraChrString, option_string)
         work_queue.put(cmd)
 
     for w in xrange(num_processors):
