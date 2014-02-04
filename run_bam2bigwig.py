@@ -18,7 +18,7 @@ from multiprocessing import Process, Queue, current_process
 
 ## Function to generate cmd to run on one file
 
-def call_bw_chr(infile,  outbase,ChromInfo, extraChrString,options=''):
+def call_bw(infile,  outbase,ChromInfo, extraChrString,options=''):
     
     myAwk = "{chr=\"%s\"$1; printf(\"%s\\t%d\\t%d\\t0\\t0\\t%s\\n\",chr,$2,$3,$6) | \" genomeCoverageBed -i stdin -bg -g %s | wigToBigWig stdin %s %s%s.bw\"s;}" % (extraChrString,ChromInfo, ChromInfo,outbase, extraChrString)
     cmd=["bamToBed","-i",infile, "-splitD"]
@@ -123,7 +123,7 @@ if __name__ == "__main__":
     parser.add_option("-H", "--Help", dest="Help", action="store",
                       default=None)
     (options, args) = parser.parse_args()
-    if options.Help or options.outdir is None or options.input_dir is None:
+    if options.Help or options.outdir is None or options.input_dir is None or options.ref is None:
         print __doc__
         sys.exit()
     main(options.input_dir, options.outdir,options.ref, options.extraChrString,options.option_string, options.num_processors)

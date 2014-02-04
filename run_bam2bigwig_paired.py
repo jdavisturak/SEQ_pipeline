@@ -5,7 +5,6 @@ Support for parallel threads
 Usage: -i input_dir -o outdir -r ChromInfo [-e 'chr'] [-O OPTIONS] [-N num_processors (default 1)]
 -e 'chr' converts from Ensembl to UCSC notation  (of somatic and sex chromosomes in human and mouse, anyway)
 
-
 """
 
 from __future__ import with_statement
