@@ -121,9 +121,16 @@ def write_lane(lane_prefix, out_prefix, outdir, fail_dir,target_name,samples,bar
 
     # Make a separate write process for each (pair of) output files
     if fail_files:
-        Writer_proc = [mp.Process(target=Write, args=(writer_queue[s], (fail_files["1"][s], fail_files["2"][s]))) for s in xrange(num_output_files) ]
+        writeMe = [fail_files["1"][s]]
+        if is_paired:
+            writeMe.append(fail_files["2"][s])
+        Writer_proc = [mp.Process(target=Write, args=(writer_queue[s], writeMe)) for s in xrange(num_output_files) ]
     else:
-        Writer_proc = [mp.Process(target=Write, args=(writer_queue[s], (out_files["1"][s], out_files["2"][s]))) for s in xrange(num_output_files)]
+
+        writeMe = [out_files["1"][s]]
+        if is_paired:
+            writeMe.append(out_files["2"][s])
+        Writer_proc = [mp.Process(target=Write, args=(writer_queue[s], writeMe)) for s in xrange(num_output_files)]
 
     # Loop through NUMBERS instead of files
     for i in xrange(num_input_files):
