@@ -127,7 +127,7 @@ if __name__ == "__main__":
     parser.add_option("-H", "--Help", dest="Help", action="store",
                       default=None)
     (options, args) = parser.parse_args()
-    if options.Help or options.outdir is None or options.input_dir is None:
+    if options.Help or options.outdir is None or options.input_dir is None or options.ref is None:
         print __doc__
         sys.exit()
     main(options.input_dir, options.outdir,options.ref, options.extraChrString,options.option_string, options.num_processors)

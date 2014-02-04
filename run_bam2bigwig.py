@@ -2,8 +2,8 @@
 """ Run bam to bigwig script on a (directory of) .sorted.bam files
 Support for parallel threads
 
-Usage: -i input_dir -o outdir [-O OPTIONS] [-N num_processors (default 1)]
-
+Usage: -i input_dir -o outdir -r ChromInfo [-e 'chr'] [-O OPTIONS] [-N num_processors (default 1)]
+-e 'chr' converts from Ensembl to UCSC notation  (of somatic and sex chromosomes in human and mouse, anyway)
 
 """
 
