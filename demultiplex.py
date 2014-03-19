@@ -45,6 +45,7 @@ def read_targets(filename='targets.txt',samples_name='Sample', barcodes_name='Ba
     samples.append(row[samples_name])
     barcodes.append(row[barcodes_name])
     lanes.append(row[lanes_name])
+
     if barcodes2_name in row.keys():
       barcodes2.append(row[barcodes2_name])     
   
@@ -80,8 +81,7 @@ def find_barcode(kmer, barcodes, max_distance, Map):
 ### Create dictionary:
 def create_barcode_dictionary(barcodes, max_distance=2):
 
-  print barcodes
- 
+   
   if not barcodes:
       return None
   
@@ -126,10 +126,9 @@ def samples_map(barcodes1,barcodes2,samples):
 
 
 ### Function to decide what type of map to return:
-def create_barcode_map(barcodes1, barcodes2, samples, max_distance=2):
-  if barcodes2 == []:
+def create_barcode_map(barcodes1, barcodes2, samples, is_double_bc, max_distance=2):
+  if not is_double_bc:
     return create_barcode_dictionary(barcodes1,max_distance)
-  
   ## if we have two barcodes:  
   # Get unique barcodes for each list; ordered 
   i1 = list(set(barcodes1))

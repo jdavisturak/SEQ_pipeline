@@ -81,7 +81,8 @@ def main(run_name, target_name, do_fail=False, inputDir='.', outdir=None, revers
         if RevBarcodes:
             barcodes = [str(Seq(b, generic_dna).reverse_complement()) for b in barcodes]
 
-        if (targets.shape[1] > 3):
+        # if there are at least 4 columns, last one is barcodes2
+        if (targets.shape[1] > 3): 
             barcodes2 = [target[3] for target in targets[targets[:,1]==lane_num]]
             # print barcodes2
             if RevBarcodes:
@@ -96,17 +97,32 @@ def write_lane(lane_prefix, out_prefix, outdir, fail_dir,target_name,samples,bar
     bc2_len = len(barcodes2[0]) if barcodes2 else None
     qseq_files = glob.glob("%s_*qseq.txt" % lane_prefix)
     one_files, two_files, bc_files, bc2_files = _split_paired(qseq_files)
+    
     is_paired = len(two_files) > 0
     is_double_bc = len(bc2_files) > 0
+
+    ## Report types of files found
     print "Detecting %s end reads and %d barcode%s for lane %s\n" % \
         ('paired' if is_paired else 'single', 2 if is_double_bc else 1,  's' if is_double_bc else '',lane_num)
+    if is_paired:
+        print 'q1: %s\nq2: %s\n' % (one_files[0], two_files[0])
+    else:
+        print 'q1: %s\n' % (one_files[0],)
+    
+    print ('bc1: %s\nbc2: %s\n' % (bc_files[0], bc2_files[0]) if is_double_bc else 'bc1: %s\n' % bc_files[0])
+
+    ## Check that I have the correct number of barcodes
+    if (is_double_bc and not barcodes2) or (barcodes2 and not is_double_bc):
+        raise Exception("Mismatch in the barcode files found (%d) and barcodes listed in the targets file (%d)" % (2 if is_double_bc else 1, 2 if barcodes2 else 1) )
+
 
     # Get paths to all files
     out_files = (_get_outfiles(out_prefix, outdir, is_paired, samples,lane_num)
                  if not fail_dir else None)
+
     fail_files = (_get_outfiles(out_prefix, fail_dir, is_paired, samples, lane_num)
                   if fail_dir else None)
-    bc_map = create_barcode_map(barcodes,barcodes2,samples)
+    bc_map = create_barcode_map(barcodes,barcodes2,samples,is_double_bc)
     
     num_output_files = len(out_files['1']) # really number of PAIRS of output files if paired reads
     num_input_files = len(one_files)
@@ -121,16 +137,17 @@ def write_lane(lane_prefix, out_prefix, outdir, fail_dir,target_name,samples,bar
 
     # Make a separate write process for each (pair of) output files
     if fail_files:
-        writeMe = [fail_files["1"][s]]
-        if is_paired:
-            writeMe.append(fail_files["2"][s])
-        Writer_proc = [mp.Process(target=Write, args=(writer_queue[s], writeMe)) for s in xrange(num_output_files) ]
+        # writeMe = [fail_files["1"][s]]
+        # if is_paired:
+        #     writeMe.append(fail_files["2"][s])
+        Writer_proc = [mp.Process(target=Write, args=(writer_queue[s], [ fail_files["1"][s], fail_files["2"][s] ] if is_paired else [fail_files["1"][s]] )) for s in xrange(num_output_files) ]
     else:
+        Writer_proc = [mp.Process(target=Write, args=(writer_queue[s], [ out_files["1"][s], out_files["2"][s] ] if is_paired else [out_files["1"][s]] )) for s in xrange(num_output_files) ]
 
-        writeMe = [out_files["1"][s]]
-        if is_paired:
-            writeMe.append(out_files["2"][s])
-        Writer_proc = [mp.Process(target=Write, args=(writer_queue[s], writeMe)) for s in xrange(num_output_files)]
+        # writeMe = [out_files["1"][s]]
+        # if is_paired:
+        #     writeMe.append(out_files["2"][s])
+        # Writer_proc = [mp.Process(target=Write, args=(writer_queue[s], writeMe)) for s in xrange(num_output_files)]
 
     # Loop through NUMBERS instead of files
     for i in xrange(num_input_files):
@@ -151,7 +168,7 @@ def write_lane(lane_prefix, out_prefix, outdir, fail_dir,target_name,samples,bar
         # Load all the input files into the work queue
         #for i, fname in enumerate(files):
         bc_file = _get_associated_barcode(i, file1, bc_files)
-        bc2_file = _get_associated_barcode(i ,file2, bc2_files)
+        bc2_file = _get_associated_barcode(i ,file1, bc2_files)
         paramsList = [file1,file2, bc_file, bc2_file, out_files, bc_map,  bc_len, bc2_len,  is_paired,fail_files, reverse]
         
         # Send the file name and other info to the worker queue
@@ -160,7 +177,7 @@ def write_lane(lane_prefix, out_prefix, outdir, fail_dir,target_name,samples,bar
     ### Cleanup for multiprocessing:
     ## Add kill signals to the worker queue, so that each Process gets the signal
     for i in xrange(num_processors):
-        worker_queue.put('kill')
+        worker_queue.put('Hasta la vista')
     
     ###  worker_queue now contains instructions to process each file.  
     #  It also has 'kill' signals equal to the number of processors
@@ -199,7 +216,7 @@ def write_lane(lane_prefix, out_prefix, outdir, fail_dir,target_name,samples,bar
 def Work(worker_queue, writer_queue, done_queue):
     while True:
         params = worker_queue.get() 
-        if (params=='kill'):
+        if (params=='Hasta la vista'):
             #print 'CONTROL: quitting processing' 
             break
 
@@ -213,7 +230,7 @@ def Write(write_queue, fhandle_list):
     
         res = write_queue.get()
         
-        if(res == 'kill'):
+        if(res == 'Hasta la vista'):
             
             break
         try:
@@ -221,7 +238,8 @@ def Write(write_queue, fhandle_list):
         except:
             warnings.warn("Failed attempt to write to file handle %s" % fhandle_list[0])    
 
-        if not fhandle_list[1] is None:
+        # If there are paired reads, we will have 2 output files here:
+        if len(fhandle_list) > 1:
             try:
                 fhandle_list[1].write(res[1])
             except:
@@ -232,7 +250,8 @@ def Write(write_queue, fhandle_list):
         fhandle_list[0].close()
     except:
         warnings.warn("Failed attempt to close file handle %s" % fhandle_list[0])
-    if not fhandle_list[1] is None:
+
+    if len(fhandle_list) > 1:
         try:
             fhandle_list[1].close()
         except:
@@ -250,7 +269,7 @@ def Terminate(done_queue, writer_queue, max_num):
             num_done += 1
 
     for q in writer_queue:
-        q.put('kill')
+        q.put('Hasta la vista')
     print "CONTROL: Sent kill signal to all WRITE queues"
 
 
@@ -261,6 +280,7 @@ def _get_associated_barcode(file_num, fname, bc_files):
     if len(bc_files) > 0:
         bc_file = bc_files[file_num]
         bc_parts = bc_file.split("_")
+        
         read_parts = fname.split("_")
         assert (bc_parts[1] == read_parts[1] and
                 bc_parts[3] == read_parts[3]), (bc_parts, read_parts)
@@ -300,7 +320,6 @@ def convert_qseq_to_fastq(params, writer_queue):
     else:
         #ambig_seqs = out_files[len(out_files) - 2]
         ambig_bcs  = out_files['1'][len(out_files['1']) - 1]
-      
     #count = 0
 
     # This loop now goes through 2 files at a time
@@ -340,21 +359,26 @@ def convert_qseq_to_fastq(params, writer_queue):
             
         BC_SEQ =  bc_seq[0:bc_len]
         BC2_SEQ = bc2_seq[0:bc2_len] if bc2_file else []                
-        full_seq = "%s\t%s" % (BC_SEQ,BC2_SEQ)
+        full_seq = ['%s\t%s\n' % (BC_SEQ,BC2_SEQ)]
 
         # This figures out which file to write to
+        
         my_index = get_sample_index(BC_SEQ, BC2_SEQ, bc_map)  
 
         
         ### Output the (pair of) sequence(s)
         if passed and not fail_files:
+
             if not my_index ==[]:
+                # this means that if found a match to one of the barcodes
                 assert(out_files != '')
                 writer_queue[my_index].put(out)
             else:
+                # Otherwise write to the ambiguous file
                 ambig_queue.put(out)
                 if not ambig_bcs is None:
-                    ambig_bcs_queue.put(full_seq+"\n")
+
+                    ambig_bcs_queue.put(full_seq)
         
         elif fail_files and not passed:                
             if not my_index == []:
@@ -362,7 +386,7 @@ def convert_qseq_to_fastq(params, writer_queue):
             else:
                 ambig_queue.put(out)
                 if not ambig_bcs is None:
-                    ambig_bcs_queue.put(full_seq+"\n") 
+                    ambig_bcs_queue.put(full_seq) 
     print "Finished processing file %s" % (fname1)
 
 
