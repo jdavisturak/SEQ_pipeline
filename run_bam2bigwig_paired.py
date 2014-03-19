@@ -19,7 +19,7 @@ from multiprocessing import Process, Queue, current_process
 ## Function to generate cmd to run on one file
 
 def call_bw(infile,  outbase,ChromInfo, extraChrString='',options=''):
-    #myAwk = "{s=$6;str=substr($4,length($4),1);if(str==2){if(s==\"+\"_) s=\"-\"; else s=\"+\"} chr=\"%s\"$1; printf(\"%%s\\t%%d\\t%%d\\t0\\t0\\t%%s\\n\",chr,$2,$3,s) | \"sort -k1,1 -k2,2n | genomeCoverageBed -i stdin -bg -g %s | wigToBigWig stdin %s %s%s.bw\"s;}" % (extraChrString,ChromInfo, ChromInfo,outbase, extraChrString)
+    
     myAwk = "{s=$6;str=substr($4,length($4),1);if(str==2){if(s==\"+\"_) s=\"-\"; else s=\"+\"} chr=\"%s\"$1; printf(\"%%s\\t%%d\\t%%d\\t0\\t0\\t%%s\\n\",chr,$2,$3,s) | \" genomeCoverageBed -i stdin -bg -g %s | wigToBigWig stdin %s %s%s.bw\"s;}" % (extraChrString,ChromInfo, ChromInfo,outbase, extraChrString)
     cmd=["bamToBed","-i",infile, "-splitD"]
     
@@ -87,6 +87,7 @@ def main(indir, outdir, ref, extraChrString, option_string, num_processors):
     done_queue = Queue()
     processes = []
 
+    fileCount = 0
     for bam in bams:
         prefix = re.sub('\.sorted.bam$','',os.path.basename(bam))
         cmd = call_bw(bam, outdir+'/'+ prefix, ref, extraChrString , option_string)
@@ -99,14 +100,15 @@ def main(indir, outdir, ref, extraChrString, option_string, num_processors):
         work_queue.put('STOP') 
 
     for p in processes:
-        p.join()
+        p.join()        
 
     done_queue.put('STOP')
 
     for status in iter(done_queue.get, 'STOP'):
         print status
+        fileCount +=1
                         
-    print "Completed splice junction counting"
+    print "Completed %s files" % fileCount
 
 
 if __name__ == "__main__":

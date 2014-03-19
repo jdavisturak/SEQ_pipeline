@@ -20,7 +20,7 @@ from multiprocessing import Process, Queue, current_process
 
 def call_bw(infile,  outbase,ChromInfo, extraChrString,options=''):
     
-    myAwk = "{chr=\"%s\"$1; printf(\"%s\\t%d\\t%d\\t0\\t0\\t%s\\n\",chr,$2,$3,$6) | \" genomeCoverageBed -i stdin -bg -g %s | wigToBigWig stdin %s %s%s.bw\"s;}" % (extraChrString,ChromInfo, ChromInfo,outbase, extraChrString)
+    myAwk = "{chr=\"%s\"$1; printf(\"%%s\\t%%d\\t%%d\\t0\\t0\\t%%s\\n\",chr,$2,$3,$6) | \" genomeCoverageBed -i stdin -bg -g %s | wigToBigWig stdin %s %s%s.bw\"$6;}" % (extraChrString,ChromInfo, ChromInfo,outbase, extraChrString)
     cmd=["bamToBed","-i",infile, "-splitD"]
 
     print myAwk
@@ -33,22 +33,20 @@ def call_bw(infile,  outbase,ChromInfo, extraChrString,options=''):
 
 
 ## Worker function for parallelization
-def worker_pipe1(work_queue, done_queue):
+def worker(work_queue, done_queue):
     try:
         for cmd in iter(work_queue.get, 'STOP'):
             print cmd            
             p1 = subprocess.Popen(cmd[0], stdout=subprocess.PIPE)
             print "pid: %s" % p1.pid
-
-            done_queue.put("%s - %s got %s." % (current_process().name, cmd, p1.pid))
-
+            
             p2 = subprocess.Popen(cmd[1], stdin=p1.stdout)
             p1.stdout.close()
             print "pid2: %s" % p2.pid
             
             retval = p2.wait()
 
-            done_queue.put("%s - %s got %s, %s." % (current_process().name, cmd, p2.pid, retval))
+            done_queue.put("%s - %s got (%s,%s), %s." % (current_process().name, cmd, p1.pid, p2.pid, retval))
 
     except Exception, e:
         done_queue.put("%s failed on %s with: %s" % (current_process().name, cmd, e.message))
@@ -86,7 +84,7 @@ def main(indir, outdir, ref, extraChrString, option_string, num_processors):
 
     for bam in bams:
         prefix = re.sub('\.sorted.bam$','',os.path.basename(bam))
-        cmd = call_bw(bam, outdir, ref, extraChrString, option_string)
+        cmd = call_bw(bam, outdir+'/'+ prefix, ref, extraChrString, option_string)
         work_queue.put(cmd)
 
     for w in xrange(num_processors):
@@ -100,11 +98,12 @@ def main(indir, outdir, ref, extraChrString, option_string, num_processors):
 
     done_queue.put('STOP')
 
+    fileCount = 0
     for status in iter(done_queue.get, 'STOP'):
         print status
+        fileCount +=1
                         
-    print "Completed splice junction counting"
-
+    print "Completed %s files" % fileCount
 
 if __name__ == "__main__":
     parser = OptionParser()
