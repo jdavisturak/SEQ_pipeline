@@ -34,7 +34,7 @@ import warnings
 
 
 
-def main(run_name, target_name, do_fail=False, inputDir='.', outdir=None, reverse=False,RevBarcodes=False, num_processors=1):
+def main(run_name, target_name, do_fail=False, inputDir='.', outdir=None, reverse=False,RevBarcodes=False, num_processors=1,max_distance=2):
                         
                     
     
@@ -88,9 +88,9 @@ def main(run_name, target_name, do_fail=False, inputDir='.', outdir=None, revers
             if RevBarcodes:
                 barcodes2 = [str(Seq(b, generic_dna).reverse_complement()) for b in barcodes2]
 
-        write_lane(lane_prefix, out_prefix, outdir, fail_dir,target_name,samples,barcodes,barcodes2, lane_num, reverse, num_processors)
+        write_lane(lane_prefix, out_prefix, outdir, fail_dir,target_name,samples,barcodes,barcodes2, lane_num, reverse, num_processors, max_distance)
         
-def write_lane(lane_prefix, out_prefix, outdir, fail_dir,target_name,samples,barcodes,barcodes2, lane_num, reverse=False, num_processors=1):
+def write_lane(lane_prefix, out_prefix, outdir, fail_dir,target_name,samples,barcodes,barcodes2, lane_num, reverse=False, num_processors=1, max_distance=2):
 
     ## Determine barcodes, etc
     bc_len = len(barcodes[0])
@@ -122,7 +122,7 @@ def write_lane(lane_prefix, out_prefix, outdir, fail_dir,target_name,samples,bar
 
     fail_files = (_get_outfiles(out_prefix, fail_dir, is_paired, samples, lane_num)
                   if fail_dir else None)
-    bc_map = create_barcode_map(barcodes,barcodes2,samples,is_double_bc)
+    bc_map = create_barcode_map(barcodes,barcodes2,samples,is_double_bc, max_distance)
     
     num_output_files = len(out_files['1']) # really number of PAIRS of output files if paired reads
     num_input_files = len(one_files)
@@ -513,11 +513,13 @@ if __name__ == "__main__":
                       default=False)
     parser.add_option("-N", "--num_processors", dest="num_processors", action="store",
                       default=1)
+    parser.add_option("-H", "--max_hamming_dist", dest="max_distance", action="store",
+                      default=2)
     parser.add_option("-i", "--inputDir", dest="inputDir", action="store",
                       default=".")
     (options, args) = parser.parse_args()
     if len(args) < 2:
         print __doc__
         sys.exit()
-    main(args[0], args[1], options.do_fail, options.inputDir, options.outdir, options.reverse, options.RevBarcodes, options.num_processors)
+    main(args[0], args[1], options.do_fail, options.inputDir, options.outdir, options.reverse, options.RevBarcodes, options.num_processors, options.max_hamming_dist)
 
