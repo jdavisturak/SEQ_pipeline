@@ -27,8 +27,8 @@ echo "Convert to bigwig? :$convert"
 echo "Convert to bigwig2? :$convert2"
 
 
-# Convert to sam.   Doesn't execute if the .sorted.bam already exists.
-if [[ ! -e "${Hits_prefix}.sorted.bam" && "$Is_sam" -eq "1" ]]
+# Convert from sam.   Doesn't execute if the .sorted.bam already exists.
+if [[ ! -e "$F.sorted.bam" && "$Is_sam" -eq "1" ]]
   then 
     echo 'Converting to .bam'    #If also converting to bigWig, don't bother outputting the .bam b/c we are gonna need to sort it anyway.
     if [ "$convert" -eq "1" ]

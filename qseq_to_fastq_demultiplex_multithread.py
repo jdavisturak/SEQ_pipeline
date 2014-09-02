@@ -23,6 +23,7 @@ import os
 import sys
 import glob
 import re
+import gc
 from optparse import OptionParser
 from Bio.Seq import Seq
 from Bio.Alphabet import generic_dna
@@ -36,7 +37,7 @@ import warnings
 
 def main(run_name, target_name, do_fail=False, inputDir='.', outdir=None, reverse=False,RevBarcodes=False, num_processors=1,max_distance=2):
                         
-                    
+    gc.enable()          
     
     try:
         num_processors = int(options.num_processors)
@@ -130,7 +131,10 @@ def write_lane(lane_prefix, out_prefix, outdir, fail_dir,target_name,samples,bar
     ### Set up multi-threaded processing (now outside of the loop)
     done_queue   = mp.Queue()
     worker_queue = mp.Queue()
+    #   Manager = mp.Manager() # This object creates a SHARED writer queue 
+    #writer_queue = [Manager.Queue() for s in range(num_output_files) ]
     writer_queue = [mp.Queue() for s in range(num_output_files) ]
+
     
     Worker_proc = [mp.Process(target=Work, args= (worker_queue, writer_queue, done_queue) ) for n in xrange(num_processors)]
     Terminator_proc = mp.Process(target=Terminate, args=(done_queue, writer_queue, num_input_files))
@@ -211,67 +215,60 @@ def write_lane(lane_prefix, out_prefix, outdir, fail_dir,target_name,samples,bar
         p.terminate() # i'm not sure why thsese don't end on their own!  Watch out for memory leak!      
         #print "CONTROL: finished a worker"
 
-      
-#@profile       
-def Work(worker_queue, writer_queue, done_queue):
-    while True:
-        params = worker_queue.get() 
-        if (params=='Hasta la vista'):
-            #print 'CONTROL: quitting processing' 
-            break
 
-        print "Processing input file ", params[0]
-        res = convert_qseq_to_fastq(params, writer_queue)
-        done_queue.put('done')
-            
+def _split_paired(files):
+    """Identify first read, second read and barcode sequences in qseqs.
 
-def Write(write_queue, fhandle_list):
-    while True:
+    Barcoded sequences are identified by being much shorter than reads
+    in the first lane.
+    """
+    files.sort()
+    one = []
+    two = []
+    bcs = []
+    bcs2 = []
+    ref_size = None
     
-        res = write_queue.get()
+    for f in files:
+        parts = f.split("_")
         
-        if(res == 'Hasta la vista'):
-            
-            break
-        try:
-            fhandle_list[0].write(res[0])
-        except:
-            warnings.warn("Failed attempt to write to file handle %s" % fhandle_list[0])    
-
-        # If there are paired reads, we will have 2 output files here:
-        if len(fhandle_list) > 1:
-            try:
-                fhandle_list[1].write(res[1])
-            except:
-                warnings.warn("Failed attempt to write to file handle %s" % fhandle_list[1])    
+        if parts[2] == "1":
+            one.append(f)
+            if ref_size is None:
+                ref_size = _get_qseq_seq_size(f) // 2
     
-    ## Close files
-    try:
-        fhandle_list[0].close()
-    except:
-        warnings.warn("Failed attempt to close file handle %s" % fhandle_list[0])
-
-    if len(fhandle_list) > 1:
-        try:
-            fhandle_list[1].close()
-        except:
-            warnings.warn("Failed attempt to close file handle %s" % fhandle_list[1])
+        elif parts[2] == "2":
+            cur_size = _get_qseq_seq_size(f)
+            assert ref_size is not None
+            if cur_size < ref_size:
+                bcs.append(f)
+            else:
+                two.append(f)
     
-## Terminator process:
-def Terminate(done_queue, writer_queue, max_num):
-    ## This function checks the number of times 'done' has appeared in the done_queue: 
-    # When this number has reached the max (# of input files), it means that all 'write' signals have already been send to write_queue, so they can get their 'kill' signal
-    num_done = 0
-    while num_done < max_num:
-        res = done_queue.get()
+        elif parts[2] == "3":
+            cur_size = _get_qseq_seq_size(f)
+            assert ref_size is not None
+            if cur_size < ref_size:
+                bcs2.append(f)
+            else:
+                two.append(f)
+        elif parts[2] == "4":
+            two.append(f)
+        else:
+            raise ValueError("Unexpected part: %s" % f)
+    one.sort()
+    two.sort()
+    bcs.sort()
+    bcs2.sort()
+    if len(two) > 0: assert len(two) == len(one)
+    if len(bcs) > 0: assert len(bcs) == len(one)
+    if len(bcs2) > 0: assert len(bcs2) == len(one)
+    return one, two, bcs, bcs2
 
-        if res == 'done':
-            num_done += 1
-
-    for q in writer_queue:
-        q.put('Hasta la vista')
-    print "CONTROL: Sent kill signal to all WRITE queues"
-
+def _get_qseq_seq_size(fname):
+    with open(fname) as in_handle:
+        parts = in_handle.readline().split("\t")
+        return len(parts[8])
 
 
 def _get_associated_barcode(file_num, fname, bc_files):
@@ -286,6 +283,51 @@ def _get_associated_barcode(file_num, fname, bc_files):
                 bc_parts[3] == read_parts[3]), (bc_parts, read_parts)
         return bc_file
     return None
+
+
+def _get_outfiles(out_prefix, outdir, has_paired_files, samples,lane_num):
+
+    out_files = {}
+    if has_paired_files:
+        for num in ("1", "2"):
+            out_files[num] = []
+            for sample in samples:
+                out_files[num].append(os.path.join(outdir, "%s%s_l%s_%s.fastq" % (
+                    out_prefix, sample, lane_num,num)))
+            #add ambigugous files:
+            out_files[num].append(os.path.join(outdir, "%sambig_l%s_%s.fastq" % (
+                    out_prefix, lane_num,num)))
+        # For paired-end files, write the barcode sequence of ambiguous barcodes only once:
+        out_files['1'].append(os.path.join(outdir, "%sambig_bcs_l%s.txt" % (
+                    out_prefix, lane_num)))
+        out_files['2'].append('') # blank name
+
+
+    else:
+        out_files["1"] = []
+        for sample in samples:
+            out_files["1"].append(os.path.join(outdir, "%s%s_l%s.fastq" % (
+                out_prefix, sample,lane_num)))
+        out_files["1"].append(os.path.join(outdir, "%sambig_l%s.fastq" % (
+                out_prefix,lane_num)))
+        out_files["1"].append(os.path.join(outdir, "%sambig_bcs_l%s.txt" % (
+                out_prefix,lane_num)))
+                
+    # Open up file handles
+    for index, flist in out_files.items():
+        for fname in out_files[index]:
+          if os.path.isfile(fname):
+            raise ValueError("File exists: %s" % fname) 
+        # For blank file name, replace with 'None'
+        out_files[index] = [open(fname, "w") if not fname=='' else None for fname in out_files[index]]
+    return out_files
+
+ 
+      
+#@profile       
+
+
+
 
 def convert_qseq_to_fastq(params, writer_queue):
 
@@ -388,7 +430,9 @@ def convert_qseq_to_fastq(params, writer_queue):
                 if not ambig_bcs is None:
                     ambig_bcs_queue.put(full_seq) 
     print "Finished processing file %s" % (fname1)
+    gc.collect()
 
+    gc.set_debug(gc.DEBUG_LEAK)
 
 def _qseq_iterator(fname, pass_wanted):
     """Return the name, sequence, quality, and pass info of qseq reads.
@@ -408,98 +452,73 @@ def _qseq_iterator(fname, pass_wanted):
                 assert len(seq) == len(qual)
                 yield name, seq, qual, passed
 
-def _get_outfiles(out_prefix, outdir, has_paired_files, samples,lane_num):
-
-    out_files = {}
-    if has_paired_files:
-        for num in ("1", "2"):
-            out_files[num] = []
-            for sample in samples:
-                out_files[num].append(os.path.join(outdir, "%s%s_l%s_%s.fastq" % (
-                    out_prefix, sample, lane_num,num)))
-            #add ambigugous files:
-            out_files[num].append(os.path.join(outdir, "%sambig_l%s_%s.fastq" % (
-                    out_prefix, lane_num,num)))
-        # For paired-end files, write the barcode sequence of ambiguous barcodes only once:
-        out_files['1'].append(os.path.join(outdir, "%sambig_bcs_l%s.txt" % (
-                    out_prefix, lane_num)))
-        out_files['2'].append('') # blank name
+    #gc.set_debug(gc.DEBUG_LEAK)
 
 
-    else:
-        out_files["1"] = []
-        for sample in samples:
-            out_files["1"].append(os.path.join(outdir, "%s%s_l%s.fastq" % (
-                out_prefix, sample,lane_num)))
-        out_files["1"].append(os.path.join(outdir, "%sambig_l%s.fastq" % (
-                out_prefix,lane_num)))
-        out_files["1"].append(os.path.join(outdir, "%sambig_bcs_l%s.txt" % (
-                out_prefix,lane_num)))
-                
-    # Open up file handles
-    for index, flist in out_files.items():
-        for fname in out_files[index]:
-          if os.path.isfile(fname):
-            raise ValueError("File exists: %s" % fname) 
-        # For blank file name, replace with 'None'
-        out_files[index] = [open(fname, "w") if not fname=='' else None for fname in out_files[index]]
-    return out_files
 
- 
 
-def _split_paired(files):
-    """Identify first read, second read and barcode sequences in qseqs.
+def Work(worker_queue, writer_queue, done_queue):
+    while True:
+        params = worker_queue.get() 
+        if (params=='Hasta la vista'):
+            #print 'CONTROL: quitting processing' 
+            break
 
-    Barcoded sequences are identified by being much shorter than reads
-    in the first lane.
-    """
-    files.sort()
-    one = []
-    two = []
-    bcs = []
-    bcs2 = []
-    ref_size = None
+        print "Processing input file ", params[0]
+        res = convert_qseq_to_fastq(params, writer_queue)
+        done_queue.put('done')
+        #gc.set_debug(gc.DEBUG_LEAK)
+            
+
+def Write(write_queue, fhandle_list):
+    while True:
     
-    for f in files:
-        parts = f.split("_")
+        res = write_queue.get()
         
-        if parts[2] == "1":
-            one.append(f)
-            if ref_size is None:
-                ref_size = _get_qseq_seq_size(f) // 2
-    
-        elif parts[2] == "2":
-            cur_size = _get_qseq_seq_size(f)
-            assert ref_size is not None
-            if cur_size < ref_size:
-                bcs.append(f)
-            else:
-                two.append(f)
-    
-        elif parts[2] == "3":
-            cur_size = _get_qseq_seq_size(f)
-            assert ref_size is not None
-            if cur_size < ref_size:
-                bcs2.append(f)
-            else:
-                two.append(f)
-        elif parts[2] == "4":
-            two.append(f)
-        else:
-            raise ValueError("Unexpected part: %s" % f)
-    one.sort()
-    two.sort()
-    bcs.sort()
-    bcs2.sort()
-    if len(two) > 0: assert len(two) == len(one)
-    if len(bcs) > 0: assert len(bcs) == len(one)
-    if len(bcs2) > 0: assert len(bcs2) == len(one)
-    return one, two, bcs, bcs2
+        if(res == 'Hasta la vista'):
+            
+            break
+        try:
+            fhandle_list[0].write(res[0])
+        except:
+            warnings.warn("Failed attempt to write to file handle %s" % fhandle_list[0])    
 
-def _get_qseq_seq_size(fname):
-    with open(fname) as in_handle:
-        parts = in_handle.readline().split("\t")
-        return len(parts[8])
+        # If there are paired reads, we will have 2 output files here:
+        if len(fhandle_list) > 1:
+            try:
+                fhandle_list[1].write(res[1])
+            except:
+                warnings.warn("Failed attempt to write to file handle %s" % fhandle_list[1])  
+
+        #gc.set_debug(gc.DEBUG_LEAK)  
+    
+    ## Close files
+    try:
+        fhandle_list[0].close()
+    except:
+        warnings.warn("Failed attempt to close file handle %s" % fhandle_list[0])
+
+    if len(fhandle_list) > 1:
+        try:
+            fhandle_list[1].close()
+        except:
+            warnings.warn("Failed attempt to close file handle %s" % fhandle_list[1])
+    #gc.set_debug(gc.DEBUG_LEAK)
+    
+## Terminator process:
+def Terminate(done_queue, writer_queue, max_num):
+    ## This function checks the number of times 'done' has appeared in the done_queue: 
+    # When this number has reached the max (# of input files), it means that all 'write' signals have already been send to write_queue, so they can get their 'kill' signal
+    num_done = 0
+    while num_done < max_num:
+        res = done_queue.get()
+
+        if res == 'done':
+            num_done += 1
+
+    for q in writer_queue:
+        q.put('Hasta la vista')
+    print "CONTROL: Sent kill signal to all WRITE queues"
 
 if __name__ == "__main__":
     parser = OptionParser()
@@ -513,7 +532,7 @@ if __name__ == "__main__":
                       default=False)
     parser.add_option("-N", "--num_processors", dest="num_processors", action="store",
                       default=1)
-    parser.add_option("-H", "--max_hamming_dist", dest="max_distance", action="store",
+    parser.add_option("-H", "--max_hamming_dist", dest="max_hamming_dist", action="store",
                       default=2)
     parser.add_option("-i", "--inputDir", dest="inputDir", action="store",
                       default=".")
