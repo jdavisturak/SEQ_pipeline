@@ -19,7 +19,7 @@ from multiprocessing import Process, Queue, current_process
 ## Function to generate cmd to run on one file
 
 def call_bam2ssj(infile,  outfile, cps, options=''):
-    cmd = ["/home/jeremy/Code/bam2ssj_jdt/bam2ssj",'-bam',infile, '-cps', cps, '-log','%s.log' % outfile,'read1','0']
+    cmd = ["bam2ssj",'-bam',infile, '-cps', cps, '-log','%s.log' % outfile,'read1','0']
 
     if options != '' and options != None:
         cmd += options.split(' ')
